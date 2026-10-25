@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beat the Model</title>
+<meta name="description" content="A college football pick'em against the spread: me against the cfb-picks model and six simple bots.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=IBM+Plex+Mono:wght@500;600&family=Public+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="band">
+  <div class="wrap">
+    <h1 class="mark">Beat the <span>Model</span></h1>
+    <div>
+      <p class="season" id="season">College football</p>
+      <p>Me against the Model and six simple strategies, against the spread.</p>
+    </div>
+  </div>
+</header>
+<div class="wrap">
+  <div class="unlock" id="unlock"></div>
+  <section class="race" id="race" aria-label="Season race"></section>
+  <nav class="tabs" aria-label="Views">
+    <a href="#week" data-view="week">This week</a>
+    <a href="#standings" data-view="standings">Standings</a>
+    <a href="#results" data-view="results">Results</a>
+  </nav>
+  <main>
+    <section id="view-week" data-view="week"><p class="note">Loading the board…</p></section>
+    <section id="view-standings" data-view="standings" hidden></section>
+    <section id="view-results" data-view="results" hidden></section>
+  </main>
+  <footer id="foot"></footer>
+</div>
+</body>
+</html>
