@@ -1,0 +1,28 @@
+name = "beat-the-model"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+# The page calls this Worker's workers.dev URL for games and picks.
+workers_dev = true
+
+[vars]
+SEASON = "2026"
+# First week on the board. Earlier weeks were before the game existed (no frozen lines, no picks).
+START_WEEK = "9"
+# Pages that may call the API from a browser (localhost on any port is always allowed, for previews).
+ALLOWED_ORIGINS = "https://mattrudy13.github.io"
+
+# The passphrase for saving picks is a secret, not a var. Set it with:
+#   npx wrangler secret put PICK_KEY
+
+[[d1_databases]]
+binding = "DB"
+database_name = "beat-the-model"
+database_id = "e07f5a40-297c-452d-9ec2-0c69fea5b498"
+
+[triggers]
+# Hourly at :35 (UTC). cfb-picks' odds snapshots run at :00 and usually finish within a few minutes;
+# GitHub sometimes starts them hours late, and the next hourly run picks them up.
+crons = ["35 * * * *"]
+
+[observability]
+enabled = true
