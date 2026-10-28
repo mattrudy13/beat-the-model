@@ -16,7 +16,8 @@ Live at https://mattrudy13.github.io/beat-the-model/ (from week 9 of 2026).
 - **The Model** takes the side its cfb-picks margin likes against the frozen line, locked when the line
   freezes. cfb-picks only posts the games where its (shrunk) edge clears a threshold, but the side is the
   same.
-- **Each team shows** its AP rank (if ranked), its record going into the game and the Model's power rank.
+- **Each team shows** its AP rank (if ranked, e.g. "#9 Ole Miss"), its record going into the game and the
+  Model's power rank: "7–1 · Model #12 · Home". Filters: All, Open, Picked, ACC, Model top 25, AP top 25.
 - **Picks lock at kickoff.** Until then you can change or clear them. The Model's and the bots' picks
   stay hidden until you pick a game or it locks.
 - **Scoring:** everyone (you, the Model and the bots) is graded on *the games you picked*, at the same
@@ -37,28 +38,39 @@ Fade the Model, Coin Flip (a fixed flip per game).
     cfb-picks' games, FCS opponents included).
   - Hourly cron (:50): AP ranks from ESPN's rankings feed for games not yet kicked off, so each game keeps
     the rank it had at kickoff. Separate from :35 because of the 10 ms CPU limit.
+  - Public: `GET /api/state` (everything the page needs) and `GET /api/summary` (headline numbers for the
+    hub tile).
+  - Need the passphrase: `POST /api/pick`, `POST /api/unlock`, and `POST /api/sync` / `POST /api/sync-ap`,
+    which run the :35 and :50 syncs now. Both syncs are behind the **Check now** link in the page footer on an
+    unlocked device.
   - Schema changes for the live database go in `worker/migrations/` (run once with `d1 execute --file`,
-    before deploying the Worker that needs them).
-  - `GET /api/state` (public), `POST /api/pick`, `POST /api/unlock` and `POST /api/sync` (need the passphrase).
-    `POST /api/sync-ap` too. They run the :35 and :50 syncs now; both are behind the "Check now" link in the
-    footer on an unlocked device.
+    before deploying the Worker that needs them; `schema.sql` is for a fresh database).
   - URL: https://beat-the-model.mattrudy13.workers.dev
 
 ### Commands
 
 ```sh
-npm test                                              # rules tests
+npm test                                              # rules and Worker helper tests
 cd worker && npx wrangler@4 deploy                    # deploy the Worker
 cd worker && npx wrangler@4 secret put PICK_KEY       # set or change the passphrase
+cd worker && npx wrangler@4 tail --format json        # live logs, with each run's cpuTime
 cd worker && npx wrangler@4 d1 execute beat-the-model --remote --command "SELECT * FROM picks"
+cd worker && npx wrangler@4 d1 execute beat-the-model --remote --file=migrations/<file>.sql
 ```
 
+Cloudflare can't run a deployed cron on demand from Wrangler; use **Check now** on the page, or wait for :35/:50.
+
 Local preview: `cd worker && npx wrangler@4 dev --test-scheduled` (uses `worker/.dev.vars`: `PICK_KEY`, and
-optionally `NOW` and `START_WEEK` to pretend it's another time), run the cron with
-`curl "localhost:8787/__scheduled?cron=35+*+*+*+*"`, then `python3 -m http.server 8000` in the repo root
+optionally `NOW` and `START_WEEK` to pretend it's another time), run the crons with
+`curl "localhost:8787/__scheduled?cron=35+*+*+*+*"` and `curl "localhost:8787/__scheduled?cron=50+*+*+*+*"`
+(the AP poll), then `python3 -m http.server 8000` in the repo root
 and open http://localhost:8000/?api=http://localhost:8787. `?api=` and `?now=` only work on localhost.
 
 ## History
 
 A prototype with sample data (made-up spreads and picks) was built 2026-10-23 and paused; it's kept locally
 in `prototype/` (not in git). v0.1 (2026-10-24) is the real game.
+
+- v0.2 (2026-10-27): AP rank and record going into the game on each team, and the AP top 25 filter.
+- v0.3 (2026-10-27): **Check now** (manual sync); the view tabs no longer scroll vertically on phones.
+- v0.4 (2026-10-27): AP ranks from ESPN's site feed on their own :50 cron (the core API refuses Cloudflare).
