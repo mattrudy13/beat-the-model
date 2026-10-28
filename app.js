@@ -25,6 +25,7 @@ let filter = store.get(FILTER_KEY) ?? "all";
 const saving = new Set(); // game ids with a save in flight
 const errors = {}; // game id → message from a failed save
 let unlockError = "";
+let syncNote = ""; // status of a "Check now" sync
 let shownWeek = null;
 
 // ---- Formatting ----
@@ -359,8 +360,26 @@ function renderFoot() {
     <p>Games, scores and the Model's margins come from <a href="https://mattrudy13.github.io/cfb-picks/">cfb-picks</a> (FBS vs FBS only);
       AP ranks from ESPN, as of kickoff.
       Each line is frozen once a week from cfb-picks' Tuesday 10 AM ET odds snapshot, and the Model's pick is locked with it.</p>
-    <p>Scores updated ${esc(ago(S.dataAt))} · last checked ${esc(ago(S.syncedAt))}.</p>`;
+    <p>Scores updated ${esc(ago(S.dataAt))} · last checked ${esc(ago(S.syncedAt))}.${unlocked()
+      ? ` <button type="button" class="btn link" id="sync"${syncNote === "Checking…" ? " disabled" : ""}>Check now</button>
+        <span role="status">${esc(syncNote)}</span>` : ""}</p>`;
 }
+
+// The Worker syncs hourly; "Check now" runs the same sync right away (passphrase holder only).
+document.addEventListener("click", async (e) => {
+  if (e.target.id !== "sync") return;
+  syncNote = "Checking…";
+  renderFoot();
+  const r = await post("/api/sync").catch(() => ({ ok: false, status: 0, data: {} }));
+  if (r.ok) {
+    syncNote = r.data.frozen ? `Done: ${r.data.frozen} new line${r.data.frozen === 1 ? "" : "s"}.` : "Done.";
+    await load().catch(() => {});
+  } else {
+    syncNote = r.status === 401 ? "The passphrase changed. Lock and unlock again." : "Couldn't sync. Try again in a minute.";
+    renderFoot();
+  }
+  $("sync")?.focus();
+});
 
 // ---- Views (each has its own #link) ----
 function show() {

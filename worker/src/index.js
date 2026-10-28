@@ -7,6 +7,7 @@
 // - GET  /api/summary: the headline numbers (for the hub tile), from the same rules as the page.
 // - POST /api/pick:   { game, side: "home" | "away" | null }. Needs the passphrase; refused after kickoff.
 // - POST /api/unlock: checks the passphrase, so the page can remember it.
+// - POST /api/sync:   runs the cron's sync now, for when cfb-picks has new scores or lines. Needs the passphrase.
 //
 // PICK_KEY is a secret (npx wrangler secret put PICK_KEY). Everything else is in wrangler.toml.
 // For local tests only, NOW in .dev.vars pretends it's another time (like cfb-picks' NOW=<iso>).
@@ -36,6 +37,10 @@ export default {
       }
       if (req.method === "POST" && url.pathname === "/api/unlock") {
         return (await authorized(req, env)) ? json({ ok: true }, 200, cors) : json({ error: "Wrong passphrase" }, 401, cors);
+      }
+      if (req.method === "POST" && url.pathname === "/api/sync") {
+        if (!(await authorized(req, env))) return json({ error: "Wrong passphrase" }, 401, cors);
+        return json({ ok: true, ...(await sync(env)) }, 200, cors);
       }
       if (req.method === "POST" && url.pathname === "/api/pick") {
         if (!(await authorized(req, env))) return json({ error: "Wrong passphrase" }, 401, cors);
@@ -128,7 +133,9 @@ async function sync(env) {
     stmts.push(env.DB.prepare("INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value").bind(k, String(v)));
   }
   await env.DB.batch(stmts);
-  console.log(`sync: week ${week}, ${stmts.length - 4} game writes, ${frozen} lines frozen`);
+  const writes = stmts.length - Object.keys(meta).length;
+  console.log(`sync: week ${week}, ${writes} game writes, ${frozen} lines frozen`);
+  return { week, writes, frozen, syncedAt: meta.syncedAt };
 }
 
 // Each team's record going into each game: wins and losses in its games that finished before kickoff,
