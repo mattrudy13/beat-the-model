@@ -1,5 +1,6 @@
--- Beat the Model's D1 database. Apply with:
+-- Beat the Model's D1 database. Apply to a fresh database with:
 --   npx wrangler d1 execute beat-the-model --remote --file=schema.sql
+-- The live database is changed with the files in migrations/ instead; keep this file matching them.
 
 -- Games copied from cfb-picks (FBS vs FBS, from the start week on). The line, the Model's margin and
 -- its pick are written once, when the line freezes, and never change after that.
