@@ -38,7 +38,8 @@ Fade the Model, Coin Flip (a fixed flip per game).
     newest poll until kickoff and then stays put.
   - Schema changes for the live database go in `worker/migrations/` (run once with `d1 execute --file`,
     before deploying the Worker that needs them).
-  - `GET /api/state` (public), `POST /api/pick` and `POST /api/unlock` (need the passphrase).
+  - `GET /api/state` (public), `POST /api/pick`, `POST /api/unlock` and `POST /api/sync` (need the passphrase).
+    `/api/sync` runs the cron's sync now; it's the "Check now" link in the footer on an unlocked device.
   - URL: https://beat-the-model.mattrudy13.workers.dev
 
 ### Commands
