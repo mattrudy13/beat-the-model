@@ -81,9 +81,11 @@ button, input { font: inherit; color: inherit; }
 }
 
 /* Views */
-.tabs { display: flex; gap: 4px; padding-block: 18px 0; border-bottom: 2px solid var(--line); overflow-x: auto; }
+/* The baseline is an inset shadow, not a border: overflow-x: auto makes overflow-y auto too, and tabs pulled
+   down over a border (margin-bottom: -2px) overflowed it, so the bar scrolled up and down on phones. */
+.tabs { display: flex; gap: 4px; padding-block: 18px 0; box-shadow: inset 0 -2px 0 var(--line); overflow-x: auto; overflow-y: hidden; }
 .tabs a {
-  padding: 10px 14px; text-decoration: none; color: var(--muted); white-space: nowrap; margin-bottom: -2px; border-bottom: 3px solid transparent;
+  padding: 10px 14px; text-decoration: none; color: var(--muted); white-space: nowrap; border-bottom: 3px solid transparent;
   font-family: var(--display); font-weight: 800; font-size: 20px; letter-spacing: .05em; text-transform: uppercase;
 }
 .tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--you); }
