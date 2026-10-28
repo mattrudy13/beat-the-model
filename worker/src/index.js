@@ -1,7 +1,8 @@
 // Beat the Model's backend: a Cloudflare Worker with a D1 database.
 //
 // - Cron (hourly): copies this season's FBS games and scores from cfb-picks' published JSON, and
-//   freezes each game's line from its odds snapshot (rules in lib/rules.js).
+//   freezes each game's line from its odds snapshot (rules in lib/rules.js). Also keeps each team's
+//   record going into the game and its AP rank (ESPN), the rank kept as it was at kickoff.
 // - GET  /api/state:  everything the page needs (games from the start week on, your picks). Public.
 // - GET  /api/summary: the headline numbers (for the hub tile), from the same rules as the page.
 // - POST /api/pick:   { game, side: "home" | "away" | null }. Needs the passphrase; refused after kickoff.
@@ -13,6 +14,9 @@
 import { shouldFreeze, sheetLine, modelSide, isOpen, summary } from "../../lib/rules.js";
 
 const CFB = "https://mattrudy13.github.io/cfb-picks/data";
+// The current AP poll alone (~30 KB). The site API's rankings feed has every poll and is ~550 KB, too
+// much to parse next to cfb-picks' JSON in 10 ms of CPU.
+const AP_POLL = "https://sports.core.api.espn.com/v2/sports/football/leagues/college-football/rankings/1";
 const nowOf = (env) => (env.NOW ? Date.parse(env.NOW) : Date.now());
 
 export default {
@@ -55,13 +59,16 @@ async function getJson(path) {
 
 async function sync(env) {
   const season = Number(env.SEASON), startWeek = Number(env.START_WEEK);
-  const [data, odds] = await Promise.all([getJson(`${season}.json`), getJson(`odds-${season}.json`)]);
+  const [data, odds, poll] = await Promise.all([getJson(`${season}.json`), getJson(`odds-${season}.json`), apPoll()]);
   if (data.season !== season) throw new Error(`cfb-picks is on season ${data.season}, Worker on ${season}`);
   // cfb-picks' week = the earliest week with a game not final. Games are copied up to that week,
   // so the board shows next week's games as soon as this week is done, lines to come Tuesday.
   const week = Math.max(startWeek, data.week);
   const rank = Object.fromEntries(data.ratings.map((r) => [r.team, r.rank]));
   const team = (name) => data.teams[name] ?? {};
+  const records = recordsBefore(data.games);
+  // null when ESPN didn't answer: AP ranks are left as they are until a later run gets the poll.
+  const ap = poll && apRanks(poll, season, data.teams);
 
   const { results } = await env.DB.prepare("SELECT * FROM games WHERE season = ?").bind(season).all();
   const have = new Map(results.map((r) => [r.id, r]));
@@ -76,20 +83,28 @@ async function sync(env) {
     const row = {
       week: g.week, start: g.start, neutral: g.neutral ? 1 : 0,
       home_pts: done ? g.homePoints : null, away_pts: done ? g.awayPoints : null, completed: done ? 1 : 0,
+      home_record: records[g.id].home, away_record: records[g.id].away,
     };
     if (!old) {
       stmts.push(env.DB.prepare(`INSERT INTO games (id, season, week, start, neutral, home, away, home_abbr, away_abbr,
-          home_conf, away_conf, home_rank, away_rank, home_pts, away_pts, completed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+          home_conf, away_conf, home_rank, away_rank, home_pts, away_pts, completed, home_record, away_record, home_ap, away_ap)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
         g.id, season, row.week, row.start, row.neutral, g.home, g.away,
         team(g.home).abbr ?? null, team(g.away).abbr ?? null, team(g.home).conference ?? null, team(g.away).conference ?? null,
-        rank[g.home] ?? null, rank[g.away] ?? null, row.home_pts, row.away_pts, row.completed));
+        rank[g.home] ?? null, rank[g.away] ?? null, row.home_pts, row.away_pts, row.completed,
+        row.home_record, row.away_record, ap?.[g.home] ?? null, ap?.[g.away] ?? null));
     } else {
       // Kickoff times move (TV picks) and scores come in; ranks are kept as they were at the freeze.
+      // Records are always the record going into the game, so they only change if a score is corrected.
       const changed = Object.keys(row).filter((k) => old[k] !== row[k]);
       if (old.line == null) {
         if (old.home_rank !== (rank[g.home] ?? null)) { row.home_rank = rank[g.home] ?? null; changed.push("home_rank"); }
         if (old.away_rank !== (rank[g.away] ?? null)) { row.away_rank = rank[g.away] ?? null; changed.push("away_rank"); }
+      }
+      // AP ranks follow the newest poll until kickoff, then stay as they were for that game.
+      if (ap && Date.parse(g.start) > now) {
+        if (old.home_ap !== (ap[g.home] ?? null)) { row.home_ap = ap[g.home] ?? null; changed.push("home_ap"); }
+        if (old.away_ap !== (ap[g.away] ?? null)) { row.away_ap = ap[g.away] ?? null; changed.push("away_ap"); }
       }
       if (changed.length) {
         stmts.push(env.DB.prepare(`UPDATE games SET ${changed.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`)
@@ -116,6 +131,46 @@ async function sync(env) {
   console.log(`sync: week ${week}, ${stmts.length - 4} game writes, ${frozen} lines frozen`);
 }
 
+// Each team's record going into each game: wins and losses in its games that finished before kickoff,
+// FCS opponents included (as the AP and ESPN count them). { [game id]: { home: "7-1", away: "5-3" } }
+export function recordsBefore(games) {
+  const sofar = {}, out = {};
+  const byKickoff = [...games].sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+  for (const g of byKickoff) {
+    const h = (sofar[g.home] ??= { w: 0, l: 0 }), a = (sofar[g.away] ??= { w: 0, l: 0 });
+    out[g.id] = { home: `${h.w}-${h.l}`, away: `${a.w}-${a.l}` };
+    if (!g.completed || g.homePoints == null || g.awayPoints == null || g.homePoints === g.awayPoints) continue;
+    const homeWon = g.homePoints > g.awayPoints;
+    h[homeWon ? "w" : "l"]++;
+    a[homeWon ? "l" : "w"]++;
+  }
+  return out;
+}
+
+async function apPoll() {
+  try {
+    const res = await fetch(AP_POLL, { cf: { cacheTtl: 0 } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.error(`AP poll: ${err.message}`);
+    return null;
+  }
+}
+
+// { [team name]: AP rank } from ESPN's poll. ESPN's team ids are CFBD's, so they match cfb-picks'
+// teams[].id. null if the poll isn't this season's AP poll (ESPN shows last season's until a new one).
+export function apRanks(poll, season, teams) {
+  if (poll?.type !== "ap" || poll.season?.year !== season) return null;
+  const nameOf = Object.fromEntries(Object.entries(teams).map(([name, t]) => [String(t.id), name]));
+  const out = {};
+  for (const r of poll.ranks ?? []) {
+    const name = nameOf[r.team?.$ref?.match(/\/teams\/(\d+)/)?.[1]];
+    if (name && r.current) out[name] = r.current;
+  }
+  return out;
+}
+
 // ---- API ----
 
 async function state(env) {
@@ -138,7 +193,8 @@ async function state(env) {
 const gameOut = (r) => ({
   id: r.id, week: r.week, start: r.start, neutral: !!r.neutral, home: r.home, away: r.away,
   homeAbbr: r.home_abbr, awayAbbr: r.away_abbr, homeConf: r.home_conf, awayConf: r.away_conf,
-  homeRank: r.home_rank, awayRank: r.away_rank, homePts: r.home_pts, awayPts: r.away_pts, completed: !!r.completed,
+  homeRank: r.home_rank, awayRank: r.away_rank, homeAp: r.home_ap, awayAp: r.away_ap,
+  homeRecord: r.home_record, awayRecord: r.away_record, homePts: r.home_pts, awayPts: r.away_pts, completed: !!r.completed,
   line: r.line, lineAt: r.line_at, books: r.books, modelMargin: r.model_margin, modelPick: r.model_pick,
 });
 

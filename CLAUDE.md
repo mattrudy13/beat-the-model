@@ -22,7 +22,14 @@ the things that are easy to get wrong.
   rewrite frozen lines or past picks; fix them with an explicit, separate change if ever needed.
 - Sign convention matches cfb-picks: `line` is the home spread, negative = home favored; home covers when
   `homePts − awayPts + line > 0`.
-- Ranks shown on the board are cfb-picks' power ranks ("Model #12"), not the AP poll.
+- The board shows two ranks: the AP poll ("#9" before the name, from ESPN) and cfb-picks' power rank
+  ("Model #12"). The `home_rank`/`away_rank` columns are the Model's; `home_ap`/`away_ap` are the AP poll.
+- AP ranks come from ESPN's core API (`sports.core.api.espn.com/.../rankings/1`, ~30 KB, no key). ESPN's
+  team ids are CFBD's, so they match cfb-picks' `teams[].id`. Don't switch to the site API's rankings feed:
+  it's ~550 KB, too much CPU next to cfb-picks' JSON. If ESPN fails, the cron logs it and keeps the old
+  AP ranks; it doesn't throw.
+- AP ranks update until kickoff, then stay as they were for that game. Records are the record going into
+  the game (recomputed every run, so a corrected score fixes them).
 - The Worker depends on cfb-picks' JSON shape (`games[].modelMargin`, `homeFbs`, `teams[].abbr/conference`,
   `ratings[].rank`, `odds.games[id].spread.median`, `byBook.draftkings.homeLine`, `takenAt`). If cfb-picks
   changes those, the cron throws and the Cloudflare dashboard logs show why.
