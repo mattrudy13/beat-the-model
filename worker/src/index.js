@@ -1,13 +1,16 @@
 // Beat the Model's backend: a Cloudflare Worker with a D1 database.
 //
-// - Cron (hourly): copies this season's FBS games and scores from cfb-picks' published JSON, and
+// - Cron (hourly, :35): copies this season's FBS games and scores from cfb-picks' published JSON, and
 //   freezes each game's line from its odds snapshot (rules in lib/rules.js). Also keeps each team's
-//   record going into the game and its AP rank (ESPN), the rank kept as it was at kickoff.
+//   record going into the game.
+// - Cron (hourly, :50): AP ranks from ESPN for games not yet kicked off, so a game keeps the rank it
+//   had at kickoff. A run of its own because ESPN's feed is big (see syncAp).
 // - GET  /api/state:  everything the page needs (games from the start week on, your picks). Public.
 // - GET  /api/summary: the headline numbers (for the hub tile), from the same rules as the page.
 // - POST /api/pick:   { game, side: "home" | "away" | null }. Needs the passphrase; refused after kickoff.
 // - POST /api/unlock: checks the passphrase, so the page can remember it.
-// - POST /api/sync:   runs the cron's sync now, for when cfb-picks has new scores or lines. Needs the passphrase.
+// - POST /api/sync:   runs the :35 sync now, for when cfb-picks has new scores or lines. Needs the passphrase.
+// - POST /api/sync-ap: runs the :50 AP sync now. Needs the passphrase.
 //
 // PICK_KEY is a secret (npx wrangler secret put PICK_KEY). Everything else is in wrangler.toml.
 // For local tests only, NOW in .dev.vars pretends it's another time (like cfb-picks' NOW=<iso>).
@@ -15,14 +18,15 @@
 import { shouldFreeze, sheetLine, modelSide, isOpen, summary } from "../../lib/rules.js";
 
 const CFB = "https://mattrudy13.github.io/cfb-picks/data";
-// The current AP poll alone (~30 KB). The site API's rankings feed has every poll and is ~550 KB, too
-// much to parse next to cfb-picks' JSON in 10 ms of CPU.
-const AP_POLL = "https://sports.core.api.espn.com/v2/sports/football/leagues/college-football/rankings/1";
+// ESPN's site API: the core API's single-poll endpoint is smaller but answers Cloudflare with 403.
+const RANKINGS = "https://site.api.espn.com/apis/site/v2/sports/football/college-football/rankings";
+// Must match the second cron in wrangler.toml.
+const AP_CRON = "50 * * * *";
 const nowOf = (env) => (env.NOW ? Date.parse(env.NOW) : Date.now());
 
 export default {
   async scheduled(controller, env) {
-    await sync(env);
+    await (controller.cron === AP_CRON ? syncAp(env) : sync(env));
   },
 
   async fetch(req, env) {
@@ -41,6 +45,10 @@ export default {
       if (req.method === "POST" && url.pathname === "/api/sync") {
         if (!(await authorized(req, env))) return json({ error: "Wrong passphrase" }, 401, cors);
         return json({ ok: true, ...(await sync(env)) }, 200, cors);
+      }
+      if (req.method === "POST" && url.pathname === "/api/sync-ap") {
+        if (!(await authorized(req, env))) return json({ error: "Wrong passphrase" }, 401, cors);
+        return json({ ok: true, ...(await syncAp(env)) }, 200, cors);
       }
       if (req.method === "POST" && url.pathname === "/api/pick") {
         if (!(await authorized(req, env))) return json({ error: "Wrong passphrase" }, 401, cors);
@@ -64,7 +72,7 @@ async function getJson(path) {
 
 async function sync(env) {
   const season = Number(env.SEASON), startWeek = Number(env.START_WEEK);
-  const [data, odds, poll] = await Promise.all([getJson(`${season}.json`), getJson(`odds-${season}.json`), apPoll()]);
+  const [data, odds] = await Promise.all([getJson(`${season}.json`), getJson(`odds-${season}.json`)]);
   if (data.season !== season) throw new Error(`cfb-picks is on season ${data.season}, Worker on ${season}`);
   // cfb-picks' week = the earliest week with a game not final. Games are copied up to that week,
   // so the board shows next week's games as soon as this week is done, lines to come Tuesday.
@@ -72,8 +80,6 @@ async function sync(env) {
   const rank = Object.fromEntries(data.ratings.map((r) => [r.team, r.rank]));
   const team = (name) => data.teams[name] ?? {};
   const records = recordsBefore(data.games);
-  // null when ESPN didn't answer: AP ranks are left as they are until a later run gets the poll.
-  const ap = poll && apRanks(poll, season, data.teams);
 
   const { results } = await env.DB.prepare("SELECT * FROM games WHERE season = ?").bind(season).all();
   const have = new Map(results.map((r) => [r.id, r]));
@@ -92,12 +98,12 @@ async function sync(env) {
     };
     if (!old) {
       stmts.push(env.DB.prepare(`INSERT INTO games (id, season, week, start, neutral, home, away, home_abbr, away_abbr,
-          home_conf, away_conf, home_rank, away_rank, home_pts, away_pts, completed, home_record, away_record, home_ap, away_ap)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+          home_conf, away_conf, home_rank, away_rank, home_pts, away_pts, completed, home_record, away_record)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
         g.id, season, row.week, row.start, row.neutral, g.home, g.away,
         team(g.home).abbr ?? null, team(g.away).abbr ?? null, team(g.home).conference ?? null, team(g.away).conference ?? null,
         rank[g.home] ?? null, rank[g.away] ?? null, row.home_pts, row.away_pts, row.completed,
-        row.home_record, row.away_record, ap?.[g.home] ?? null, ap?.[g.away] ?? null));
+        row.home_record, row.away_record));
     } else {
       // Kickoff times move (TV picks) and scores come in; ranks are kept as they were at the freeze.
       // Records are always the record going into the game, so they only change if a score is corrected.
@@ -105,11 +111,6 @@ async function sync(env) {
       if (old.line == null) {
         if (old.home_rank !== (rank[g.home] ?? null)) { row.home_rank = rank[g.home] ?? null; changed.push("home_rank"); }
         if (old.away_rank !== (rank[g.away] ?? null)) { row.away_rank = rank[g.away] ?? null; changed.push("away_rank"); }
-      }
-      // AP ranks follow the newest poll until kickoff, then stay as they were for that game.
-      if (ap && Date.parse(g.start) > now) {
-        if (old.home_ap !== (ap[g.home] ?? null)) { row.home_ap = ap[g.home] ?? null; changed.push("home_ap"); }
-        if (old.away_ap !== (ap[g.away] ?? null)) { row.away_ap = ap[g.away] ?? null; changed.push("away_ap"); }
       }
       if (changed.length) {
         stmts.push(env.DB.prepare(`UPDATE games SET ${changed.map((k) => `${k} = ?`).join(", ")} WHERE id = ?`)
@@ -154,27 +155,43 @@ export function recordsBefore(games) {
   return out;
 }
 
-async function apPoll() {
-  try {
-    const res = await fetch(AP_POLL, { cf: { cacheTtl: 0 } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
-  } catch (err) {
-    console.error(`AP poll: ${err.message}`);
-    return null;
+// ---- Cron: AP ranks ----
+
+// ESPN's rankings feed has every poll and is ~550 KB. Parsing it costs a few ms of CPU, and the :35 sync
+// already uses about 10 ms parsing cfb-picks' JSON, so it gets its own run (and its own 10 ms). Only games
+// not yet kicked off are updated: the newest poll until kickoff, then the rank stays as it was.
+async function syncAp(env) {
+  const season = Number(env.SEASON);
+  const res = await fetch(RANKINGS, { cf: { cacheTtl: 0 } });
+  if (!res.ok) throw new Error(`AP poll: HTTP ${res.status}`);
+  const ap = apRanks(await res.json(), season);
+  if (!ap) {
+    console.log(`sync-ap: no ${season} AP poll yet`);
+    return { updated: 0 };
   }
+  const now = nowOf(env);
+  const { results } = await env.DB.prepare("SELECT id, start, home, away, home_ap, away_ap FROM games WHERE season = ?").bind(season).all();
+  const stmts = [];
+  for (const g of results) {
+    if (Date.parse(g.start) <= now) continue;
+    const home = ap[g.home] ?? null, away = ap[g.away] ?? null;
+    if (g.home_ap !== home || g.away_ap !== away) {
+      stmts.push(env.DB.prepare("UPDATE games SET home_ap = ?, away_ap = ? WHERE id = ?").bind(home, away, g.id));
+    }
+  }
+  if (stmts.length) await env.DB.batch(stmts);
+  console.log(`sync-ap: ${Object.keys(ap).length} ranked, ${stmts.length} games updated`);
+  return { updated: stmts.length };
 }
 
-// { [team name]: AP rank } from ESPN's poll. ESPN's team ids are CFBD's, so they match cfb-picks'
-// teams[].id. null if the poll isn't this season's AP poll (ESPN shows last season's until a new one).
-export function apRanks(poll, season, teams) {
-  if (poll?.type !== "ap" || poll.season?.year !== season) return null;
-  const nameOf = Object.fromEntries(Object.entries(teams).map(([name, t]) => [String(t.id), name]));
+// { [team name]: AP rank } from ESPN's rankings feed. ESPN's team `location` is the same name cfb-picks
+// uses (CFBD takes it from ESPN; checked for all 138 FBS teams in 2026). null if there's no AP poll for
+// this season (ESPN shows last season's until the new preseason poll).
+export function apRanks(feed, season) {
+  const poll = feed?.rankings?.find((r) => r.type === "ap");
+  if (!poll || poll.season?.year !== season) return null;
   const out = {};
-  for (const r of poll.ranks ?? []) {
-    const name = nameOf[r.team?.$ref?.match(/\/teams\/(\d+)/)?.[1]];
-    if (name && r.current) out[name] = r.current;
-  }
+  for (const r of poll.ranks ?? []) if (r.current && r.team?.location) out[r.team.location] = r.current;
   return out;
 }
 

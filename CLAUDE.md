@@ -24,10 +24,12 @@ the things that are easy to get wrong.
   `homePts − awayPts + line > 0`.
 - The board shows two ranks: the AP poll ("#9" before the name, from ESPN) and cfb-picks' power rank
   ("Model #12"). The `home_rank`/`away_rank` columns are the Model's; `home_ap`/`away_ap` are the AP poll.
-- AP ranks come from ESPN's core API (`sports.core.api.espn.com/.../rankings/1`, ~30 KB, no key). ESPN's
-  team ids are CFBD's, so they match cfb-picks' `teams[].id`. Don't switch to the site API's rankings feed:
-  it's ~550 KB, too much CPU next to cfb-picks' JSON. If ESPN fails, the cron logs it and keeps the old
-  AP ranks; it doesn't throw.
+- AP ranks come from ESPN's site API rankings feed (`site.api.espn.com/.../rankings`, no key), matched on
+  ESPN's team `location`, which equals cfb-picks' team name for all 138 FBS teams (2026). ESPN's smaller
+  core API (`sports.core.api.espn.com`) returns 403 to Cloudflare whatever the headers, so don't switch.
+- The feed is ~550 KB, so the AP poll runs on its own cron (:50, `AP_CRON`), never inside the :35 sync:
+  that one already uses ~11 ms of CPU (2026-10-27, the free tier's limit is 10 ms) and a CPU kill there
+  would stop scores and line freezes. If ESPN fails, only the :50 run fails; old AP ranks stay.
 - AP ranks update until kickoff, then stay as they were for that game. Records are the record going into
   the game (recomputed every run, so a corrected score fixes them).
 - The Worker depends on cfb-picks' JSON shape (`games[].modelMargin`, `homeFbs`, `teams[].abbr/conference`,

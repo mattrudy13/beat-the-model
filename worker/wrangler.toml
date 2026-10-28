@@ -22,7 +22,8 @@ database_id = "e07f5a40-297c-452d-9ec2-0c69fea5b498"
 [triggers]
 # Hourly at :35 (UTC). cfb-picks' odds snapshots run at :00 and usually finish within a few minutes;
 # GitHub sometimes starts them hours late, and the next hourly run picks them up.
-crons = ["35 * * * *"]
+# :50 is the AP poll (AP_CRON in src/index.js), in a run of its own for the CPU limit.
+crons = ["35 * * * *", "50 * * * *"]
 
 [observability]
 enabled = true

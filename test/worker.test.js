@@ -18,12 +18,13 @@ test("a record counts only games finished before kickoff", () => {
   assert.deepEqual(r[4], { home: "0-0", away: "1-1" });
 });
 
-test("AP ranks map ESPN team ids to cfb-picks names", () => {
-  const teams = { Miami: { id: 2390 }, Virginia: { id: 258 }, Georgia: { id: 61 } };
-  const ref = (id) => ({ $ref: `http://sports.core.api.espn.com/v2/sports/football/leagues/college-football/seasons/2026/teams/${id}?lang=en` });
-  const poll = { type: "ap", season: { year: 2026 }, ranks: [{ current: 1, team: ref(2390) }, { current: 3, team: ref(61) }, { current: 4, team: ref(9999) }] };
-  assert.deepEqual(apRanks(poll, 2026, teams), { Miami: 1, Georgia: 3 });
-  // Last season's poll, or a different poll, means no ranks rather than wrong ones.
-  assert.equal(apRanks({ ...poll, season: { year: 2025 } }, 2026, teams), null);
-  assert.equal(apRanks({ ...poll, type: "usa" }, 2026, teams), null);
+test("AP ranks come from the AP poll in ESPN's rankings feed", () => {
+  const team = (location) => ({ id: "1", location });
+  const ap = { type: "ap", season: { year: 2026 }, ranks: [{ current: 1, team: team("Miami") }, { current: 3, team: team("Georgia") }] };
+  const coaches = { type: "usa", season: { year: 2026 }, ranks: [{ current: 1, team: team("Ohio State") }] };
+  // The coaches poll comes first on purpose: the AP poll is picked by type, not position.
+  assert.deepEqual(apRanks({ rankings: [coaches, ap] }, 2026), { Miami: 1, Georgia: 3 });
+  // Last season's poll, or no AP poll, means no ranks rather than wrong ones.
+  assert.equal(apRanks({ rankings: [{ ...ap, season: { year: 2025 } }] }, 2026), null);
+  assert.equal(apRanks({ rankings: [coaches] }, 2026), null);
 });
