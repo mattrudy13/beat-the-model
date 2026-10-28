@@ -1,4 +1,5 @@
 node_modules/
+.claude/
 worker/.dev.vars
 worker/.wrangler/
 # The paused 2026-10-23 prototype (sample data), kept locally for reference.
