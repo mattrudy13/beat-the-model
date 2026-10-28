@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS games (
   away_conf    TEXT,
   home_rank    INTEGER,              -- cfb-picks power rank (the Model's, not the AP poll)
   away_rank    INTEGER,
+  home_ap      INTEGER,              -- AP poll rank (ESPN) as of kickoff; NULL = unranked
+  away_ap      INTEGER,
+  home_record  TEXT,                 -- record going into the game, e.g. '7-1'
+  away_record  TEXT,
   home_pts     INTEGER,
   away_pts     INTEGER,
   completed    INTEGER NOT NULL DEFAULT 0,
