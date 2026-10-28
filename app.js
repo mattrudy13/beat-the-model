@@ -117,6 +117,7 @@ const FILTERS = [
   ["picked", "Picked", (g) => !!S.picks[g.id]],
   ["acc", "ACC", (g) => g.homeConf === "ACC" || g.awayConf === "ACC"],
   ["top25", "Model top 25", (g) => (g.homeRank ?? 999) <= 25 || (g.awayRank ?? 999) <= 25],
+  ["ap", "AP top 25", (g) => !!(g.homeAp || g.awayAp)],
 ];
 
 function gameCard(g) {
@@ -129,11 +130,15 @@ function gameCard(g) {
   const busy = saving.has(g.id);
   const sideBtn = (side) => {
     const r = side === "home" ? g.homeRank : g.awayRank;
+    const ap = side === "home" ? g.homeAp : g.awayAp;
+    const record = side === "home" ? g.homeRecord : g.awayRecord;
     const where = side === "home" ? (g.neutral ? "Neutral site" : "Home") : "Away";
+    // A 0-0 record says nothing, so it's left off (week 0/1).
+    const info = [record && record !== "0-0" ? record.replace("-", "–") : "", r ? `Model #${r}` : "", where].filter(Boolean).join(" · ");
     const pts = final ? `<span class="pts">${side === "home" ? g.homePts : g.awayPts}</span>` : "";
     return `<button type="button" class="side${busy && yours === side ? " saving" : ""}" data-game="${g.id}" data-side="${side}"
         aria-pressed="${yours === side}" ${locked || !unlocked() || busy ? "disabled" : ""}>
-        <span class="team">${esc(teamOf(g, side))}<small>${r ? `Model #${r} · ` : ""}${where}</small></span>
+        <span class="team">${ap ? `<span class="ap">#${ap}</span> ` : ""}${esc(teamOf(g, side))}<small>${esc(info)}</small></span>
         <span>${pts}<span class="ln">${lineFor(g, side)}</span></span></button>`;
   };
   // The Model's and the bots' picks stay hidden until you've picked (or the game locks), so they
@@ -351,7 +356,8 @@ document.addEventListener("click", (e) => {
 // ---- Footer ----
 function renderFoot() {
   $("foot").innerHTML = `
-    <p>Games, scores and the Model's margins come from <a href="https://mattrudy13.github.io/cfb-picks/">cfb-picks</a> (FBS vs FBS only).
+    <p>Games, scores and the Model's margins come from <a href="https://mattrudy13.github.io/cfb-picks/">cfb-picks</a> (FBS vs FBS only);
+      AP ranks from ESPN, as of kickoff.
       Each line is frozen once a week from cfb-picks' Tuesday 10 AM ET odds snapshot, and the Model's pick is locked with it.</p>
     <p>Scores updated ${esc(ago(S.dataAt))} · last checked ${esc(ago(S.syncedAt))}.</p>`;
 }

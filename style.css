@@ -118,6 +118,7 @@ main { padding-block: 18px 32px; }
   border: 2px solid var(--line); border-radius: 8px; background: var(--soft); cursor: pointer; min-width: 0;
 }
 .side .team { font-weight: 700; font-size: 15.5px; min-width: 0; overflow-wrap: anywhere; }
+.side .team .ap { font-family: var(--mono); font-weight: 600; font-size: 13px; color: var(--muted); }
 .side .team small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
 .side .ln { font-family: var(--mono); font-weight: 600; font-size: 15.5px; white-space: nowrap; }
 .side .pts { font-family: var(--mono); font-weight: 600; font-size: 15.5px; color: var(--muted); margin-right: 6px; }

@@ -16,6 +16,7 @@ Live at https://mattrudy13.github.io/beat-the-model/ (from week 9 of 2026).
 - **The Model** takes the side its cfb-picks margin likes against the frozen line, locked when the line
   freezes. cfb-picks only posts the games where its (shrunk) edge clears a threshold, but the side is the
   same.
+- **Each team shows** its AP rank (if ranked), its record going into the game and the Model's power rank.
 - **Picks lock at kickoff.** Until then you can change or clear them. The Model's and the bots' picks
   stay hidden until you pick a game or it locks.
 - **Scoring:** everyone (you, the Model and the bots) is graded on *the games you picked*, at the same
@@ -32,7 +33,11 @@ Fade the Model, Coin Flip (a fixed flip per game).
   page and the Worker. Tests: `npm test` (Node's built-in `node:test`).
 - `worker/`: a Cloudflare Worker with a D1 database (`beat-the-model`).
   - Hourly cron (:35): copies games and scores from cfb-picks' published `data/<season>.json` and freezes
-    lines from `data/odds-<season>.json`.
+    lines from `data/odds-<season>.json`. It also stores each team's record going into the game (from
+    cfb-picks' games, FCS opponents included) and its AP rank from ESPN's current poll, which follows the
+    newest poll until kickoff and then stays put.
+  - Schema changes for the live database go in `worker/migrations/` (run once with `d1 execute --file`,
+    before deploying the Worker that needs them).
   - `GET /api/state` (public), `POST /api/pick` and `POST /api/unlock` (need the passphrase).
   - URL: https://beat-the-model.mattrudy13.workers.dev
 
