@@ -34,12 +34,14 @@ Fade the Model, Coin Flip (a fixed flip per game).
 - `worker/`: a Cloudflare Worker with a D1 database (`beat-the-model`).
   - Hourly cron (:35): copies games and scores from cfb-picks' published `data/<season>.json` and freezes
     lines from `data/odds-<season>.json`. It also stores each team's record going into the game (from
-    cfb-picks' games, FCS opponents included) and its AP rank from ESPN's current poll, which follows the
-    newest poll until kickoff and then stays put.
+    cfb-picks' games, FCS opponents included).
+  - Hourly cron (:50): AP ranks from ESPN's rankings feed for games not yet kicked off, so each game keeps
+    the rank it had at kickoff. Separate from :35 because of the 10 ms CPU limit.
   - Schema changes for the live database go in `worker/migrations/` (run once with `d1 execute --file`,
     before deploying the Worker that needs them).
   - `GET /api/state` (public), `POST /api/pick`, `POST /api/unlock` and `POST /api/sync` (need the passphrase).
-    `/api/sync` runs the cron's sync now; it's the "Check now" link in the footer on an unlocked device.
+    `POST /api/sync-ap` too. They run the :35 and :50 syncs now; both are behind the "Check now" link in the
+    footer on an unlocked device.
   - URL: https://beat-the-model.mattrudy13.workers.dev
 
 ### Commands

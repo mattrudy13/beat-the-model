@@ -370,7 +370,9 @@ document.addEventListener("click", async (e) => {
   if (e.target.id !== "sync") return;
   syncNote = "Checking…";
   renderFoot();
+  // Two calls because the Worker runs the AP poll separately (CPU limit); AP ranks failing isn't worth an error.
   const r = await post("/api/sync").catch(() => ({ ok: false, status: 0, data: {} }));
+  if (r.ok) await post("/api/sync-ap").catch(() => {});
   if (r.ok) {
     syncNote = r.data.frozen ? `Done: ${r.data.frozen} new line${r.data.frozen === 1 ? "" : "s"}.` : "Done.";
     await load().catch(() => {});
