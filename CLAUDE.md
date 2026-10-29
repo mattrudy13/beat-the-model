@@ -28,6 +28,7 @@ the things that are easy to get wrong.
 - **Keep cfb-picks as its own site, linked to this one** (not merged): cfb-picks is the recruiter-facing
   track record and research pages; this is the personal game. Each card gets a "Best Bet" tag where cfb-picks
   posted a pick, and links to both teams' cfb-picks pages.
+- **No link back from cfb-picks** to this site: cfb-picks is on the recruiter portfolio, and this game is kept off it.
 - (Assumed, not asked) The tag and links follow the same hide-until-you-pick rule as the Model's pick, so they
   don't do the homework.
 
