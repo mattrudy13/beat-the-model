@@ -23,6 +23,14 @@ the things that are easy to get wrong.
 - **Workflow**: one PR per change; Rudy approves each Worker deploy and merge in chat (auto mode blocks a
   production deploy without that).
 
+## Decisions (Rudy, 2026-10-29)
+
+- **Keep cfb-picks as its own site, linked to this one** (not merged): cfb-picks is the recruiter-facing
+  track record and research pages; this is the personal game. Each card gets a "Best Bet" tag where cfb-picks
+  posted a pick, and links to both teams' cfb-picks pages.
+- (Assumed, not asked) The tag and links follow the same hide-until-you-pick rule as the Model's pick, so they
+  don't do the homework.
+
 ## Things to keep straight
 
 - `lib/rules.js` is used by both the page and the Worker (wrangler bundles `../../lib/rules.js`). A rules
@@ -46,6 +54,9 @@ the things that are easy to get wrong.
   `awayPoints`, `homeFbs`, `teams[].abbr/conference`, `ratings[].rank`, `odds.games[id].spread.median`,
   `byBook.draftkings.homeLine`, `takenAt`) and ESPN's (`rankings[]` with `type: "ap"`, `season.year`,
   `ranks[].current`, `ranks[].team.location`). If either changes, that cron throws and the logs show why.
+- The page (not the Worker) reads cfb-picks' `data/picks-<season>.json` for the Best Bet tag: `weeks.*.picks[]`
+  with `gameId`, `model`, `takenAt`, `shadow`, `cat`, `team`, `line` (the pick team's own line) and `result`.
+  Same "current model = the newest pick's" rule as the hub. If it fails to load, the board shows without tags.
 - Schema changes: add a file to `worker/migrations/`, update `schema.sql` to match, and run the migration
   on the live database **before** deploying the Worker that uses it; the other way round, the :35 cron
   throws on the missing columns.

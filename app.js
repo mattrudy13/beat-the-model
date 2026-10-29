@@ -9,6 +9,7 @@ const params = new URLSearchParams(location.search);
 // ?api= and ?now= only work on a local preview, so a crafted link can't send the passphrase elsewhere.
 const API = (local && params.get("api")) || LIVE_API;
 const now = () => (local && params.get("now") ? Date.parse(params.get("now")) : Date.now());
+const CFB = "https://mattrudy13.github.io/cfb-picks/";
 const KEY = "btm:key:v1";
 const FILTER_KEY = "btm:filter:v1";
 
@@ -27,6 +28,7 @@ const errors = {}; // game id → message from a failed save
 let unlockError = "";
 let syncNote = ""; // status of a "Check now" sync
 let shownWeek = null;
+let bestBets = new Map(); // game id → cfb-picks' Best Bet on it
 
 // ---- Formatting ----
 const signed = (x) => (x === 0 ? "PK" : x < 0 ? `−${Math.abs(x)}` : `+${x}`);
@@ -55,6 +57,22 @@ async function load() {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   S = await res.json();
   render();
+  loadBestBets(S.season).catch((err) => console.warn("cfb-picks Best Bets didn't load; the board shows without them:", err));
+}
+
+// cfb-picks' Best Bets: the current model's spread picks (the newest pick's model, same rule as the hub's
+// cfb tile). Read straight from cfb-picks' site, so the Worker doesn't have to parse another file.
+async function loadBestBets(season) {
+  const res = await fetch(`${CFB}data/picks-${season}.json`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const all = Object.values((await res.json()).weeks ?? {}).flatMap((w) => w.picks);
+  const model = [...all].sort((a, b) => b.takenAt.localeCompare(a.takenAt))[0]?.model ?? "v2";
+  const next = new Map(all.filter((p) => (p.model ?? "v2") === model && !p.shadow && p.cat === "spread").map((p) => [p.gameId, p]));
+  // Re-render only when something changed: a render wipes a half-typed passphrase.
+  const sig = (m) => [...m.values()].map((p) => `${p.gameId}:${p.result ?? ""}`).join();
+  if (sig(next) === sig(bestBets)) return;
+  bestBets = next;
+  if (!saving.size) render();
 }
 
 async function post(path, body) {
@@ -145,6 +163,7 @@ function gameCard(g) {
   // The Model's and the bots' picks stay hidden until you've picked (or the game locks), so they
   // can't do your homework. Visitors who can't pick see everything.
   const reveal = yours || locked || !unlocked();
+  const bet = reveal ? bestBets.get(g.id) : null;
   const m = g.modelMargin;
   const take = `${teamOf(g, g.modelPick)} ${lineFor(g, g.modelPick)}`;
   let foot;
@@ -153,7 +172,11 @@ function gameCard(g) {
   else {
     const verdict = yours ? `<span class="verdict ${yours === g.modelPick ? "agree" : "fade"}">${yours === g.modelPick ? "You agree" : "You're fading the Model"}</span>` : "";
     const result = final ? `<b>${c === "push" ? "Push" : `${esc(teamOf(g, c))} covered`}.</b> ` : "";
-    foot = `<span>${result}The Model has ${Math.abs(m) < 0.05 ? "it even" : `${esc(m > 0 ? g.home : g.away)} by ${Math.abs(m).toFixed(1)}`}, so it takes <b>${esc(take)}</b>.</span>${verdict}`;
+    // cfb-picks' line is the one it took when it posted, so it can differ from the frozen line.
+    const bb = bet ? ` cfb-picks Best Bet: <b>${esc(bet.team)} ${signed(bet.line)}</b>${bet.result ? ` (${{ W: "won", L: "lost", P: "push" }[bet.result] ?? ""})` : ""}.` : "";
+    const team = (side) => `<a href="${CFB}team.html?team=${encodeURIComponent(teamOf(g, side))}">${esc(teamOf(g, side))}</a>`;
+    foot = `<span>${result}The Model has ${Math.abs(m) < 0.05 ? "it even" : `${esc(m > 0 ? g.home : g.away)} by ${Math.abs(m).toFixed(1)}`}, so it takes <b>${esc(take)}</b>.${bb}</span>${verdict}
+      <span class="research">More on cfb-picks: ${team("away")} · ${team("home")}</span>`;
   }
   const who = reveal
     ? `<div class="who" aria-label="Who picked each side">${["away", "home"].map((s) =>
@@ -164,7 +187,7 @@ function gameCard(g) {
     : locked ? [yours ? "Locked" : "Locked · no pick", "locked"]
     : yours ? ["Picked", "picked"] : ["Open", ""];
   return `<li class="game${locked ? " locked" : ""}">
-    <div class="game-top"><span>${esc(kick(g.start))}</span><span class="state ${state[1]}">${state[0]}</span></div>
+    <div class="game-top"><span>${esc(kick(g.start))}</span><span class="tags">${bet ? `<span class="bb">Best Bet</span>` : ""}<span class="state ${state[1]}">${state[0]}</span></span></div>
     <div class="sides">${sideBtn("away")}${sideBtn("home")}</div>
     ${who}
     <div class="game-foot">${foot}</div>
@@ -192,7 +215,8 @@ function renderWeek() {
   const freeze = all.length ? Math.min(...all.map((g) => freezeTime(g.start))) : null;
   const lineAt = withLine.map((g) => g.lineAt).sort()[0];
   const intro = withLine.length
-    ? `Lines are frozen from cfb-picks' ${esc(kick(lineAt))} odds snapshot (median of US sportsbooks). Pick any games you like; each locks at kickoff${nextLock ? `, the next at ${esc(kick(nextLock))}` : ""}.`
+    ? `Lines are frozen from cfb-picks' ${esc(kick(lineAt))} odds snapshot (median of US sportsbooks). Pick any games you like; each locks at kickoff${nextLock ? `, the next at ${esc(kick(nextLock))}` : ""}.
+      Once you pick a game, a <b>Best Bet</b> tag shows if cfb-picks posted it as one of its own picks, at the line it took then.`
     : freeze && freeze > t
       ? `Lines freeze <b>${esc(dayName(freeze))}, 10 AM ET</b>, from cfb-picks' Tuesday odds snapshot. Games show up here once they have a line.`
       : `No lines yet this week. They come from cfb-picks' odds snapshots; this page checks every hour.`;

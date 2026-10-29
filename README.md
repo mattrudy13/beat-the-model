@@ -18,6 +18,8 @@ Live at https://mattrudy13.github.io/beat-the-model/ (from week 9 of 2026).
   same.
 - **Each team shows** its AP rank (if ranked, e.g. "#9 Ole Miss"), its record going into the game and the
   Model's power rank: "7–1 · Model #12 · Home". Filters: All, Open, Picked, ACC, Model top 25, AP top 25.
+- **cfb-picks links:** once you pick a game (or it locks), a **Best Bet** tag marks the games cfb-picks posted
+  as its own picks, with its pick at the line it took then, and each card links to both teams' cfb-picks pages.
 - **Picks lock at kickoff.** Until then you can change or clear them. The Model's and the bots' picks
   stay hidden until you pick a game or it locks.
 - **Scoring:** everyone (you, the Model and the bots) is graded on *the games you picked*, at the same
@@ -29,7 +31,8 @@ Fade the Model, Coin Flip (a fixed flip per game).
 
 ## How it's built
 
-- `index.html`, `app.js`, `style.css`: the page (GitHub Pages, no build step). It reads everything from the Worker.
+- `index.html`, `app.js`, `style.css`: the page (GitHub Pages, no build step). It reads everything from the Worker,
+  apart from cfb-picks' Best Bets, which it reads straight from cfb-picks' `data/picks-<season>.json`.
 - `lib/rules.js`: the rules (freeze time, sheet line, Model side, covers, bots, standings), shared by the
   page and the Worker. Tests: `npm test` (Node's built-in `node:test`).
 - `worker/`: a Cloudflare Worker with a D1 database (`beat-the-model`).
@@ -74,3 +77,4 @@ in `prototype/` (not in git). v0.1 (2026-10-24) is the real game.
 - v0.2 (2026-10-27): AP rank and record going into the game on each team, and the AP top 25 filter.
 - v0.3 (2026-10-27): **Check now** (manual sync); the view tabs no longer scroll vertically on phones.
 - v0.4 (2026-10-27): AP ranks from ESPN's site feed on their own :50 cron (the core API refuses Cloudflare).
+- v0.5 (2026-10-29): cfb-picks Best Bet tag and links to each team's cfb-picks page.
