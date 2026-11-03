@@ -1,0 +1,40 @@
+name: Back up picks
+
+# Rudy's picks and the frozen lines live only in the Worker's D1 database, and neither can be rebuilt
+# (a line is frozen once, from that Tuesday's odds). This copies the public /api/state into
+# backup/state-<season>.json every day. Restore with scripts/restore-sql.mjs (see CLAUDE.md).
+
+on:
+  schedule:
+    # 11:00 UTC = 6–7 AM ET, after the night's games. Late or skipped runs don't matter much here:
+    # the next one copies everything again.
+    - cron: "0 11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Copy the state
+        run: |
+          curl -sf --retry 3 --retry-all-errors https://beat-the-model.mattrudy13.workers.dev/api/state -o state.json
+          season=$(jq -r .season state.json)
+          mkdir -p backup
+          # Only what can't be rebuilt, sorted, so a run with no new picks, lines or scores commits nothing.
+          # (syncedAt and the other timestamps change every hour.)
+          jq -S '{season, startWeek, games: (.games | sort_by(.id)), picks}' state.json > "backup/state-$season.json"
+          rm state.json
+          jq -e '.games | length > 0' "backup/state-$season.json" > /dev/null
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backup
+          git diff --cached --quiet && exit 0
+          git commit -m "data: back up picks $(date -u +%Y-%m-%d)"
+          git push

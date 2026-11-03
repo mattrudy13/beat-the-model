@@ -61,6 +61,14 @@ the things that are easy to get wrong.
 - Schema changes: add a file to `worker/migrations/`, update `schema.sql` to match, and run the migration
   on the live database **before** deploying the Worker that uses it; the other way round, the :35 cron
   throws on the missing columns.
+- **Backups** (added 2026-11-02): picks and frozen lines exist only in D1 and can't be rebuilt, so
+  `.github/workflows/backup.yml` copies the public `/api/state` (games with lines, model picks and AP ranks,
+  plus picks with `at`) into `backup/state-<season>.json` daily at 11:00 UTC, committing only on a change.
+  To restore: `node scripts/restore-sql.mjs backup/state-<season>.json > restore.sql`, then
+  `cd worker && npx wrangler d1 execute beat-the-model --remote --file=../restore.sql`. It replaces
+  existing rows with the backup's copy (picks made after the backup survive; a game's newer score comes back
+  on the next :35 sync). Tested 2026-11-02 against a fresh `schema.sql` database with foreign keys on:
+  118 games, 56 lines, 54 picks, identical. If `/api/state` ever drops a field, the backup loses it too.
 - New season: set `SEASON` and `START_WEEK` in `worker/wrangler.toml` and redeploy.
 - `?api=`/`?now=` overrides are ignored off localhost on purpose, so a crafted link can't send the
   passphrase to another server.
