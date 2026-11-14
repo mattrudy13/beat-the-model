@@ -751,7 +751,7 @@
       "modelMargin": 1.9928455986991613,
       "modelPick": "away",
       "neutral": false,
-      "start": "2026-11-14T20:30:00.000Z",
+      "start": "2026-11-14T22:30:00.000Z",
       "week": 11
     },
     {
@@ -777,7 +777,7 @@
       "modelMargin": 6.3324887702742645,
       "modelPick": "away",
       "neutral": false,
-      "start": "2026-11-14T20:30:00.000Z",
+      "start": "2026-11-15T00:00:00.000Z",
       "week": 11
     },
     {
@@ -811,16 +811,16 @@
       "awayAbbr": "HOU",
       "awayAp": 14,
       "awayConf": "Big 12",
-      "awayPts": null,
+      "awayPts": 32,
       "awayRank": 20,
       "awayRecord": "7-2",
       "books": 4,
-      "completed": false,
+      "completed": true,
       "home": "Colorado",
       "homeAbbr": "COLO",
       "homeAp": null,
       "homeConf": "Big 12",
-      "homePts": null,
+      "homePts": 42,
       "homeRank": 89,
       "homeRecord": "3-6",
       "id": 401856860,
@@ -855,7 +855,7 @@
       "modelMargin": -0.033083972375433035,
       "modelPick": "away",
       "neutral": false,
-      "start": "2026-11-14T22:30:00.000Z",
+      "start": "2026-11-14T20:30:00.000Z",
       "week": 11
     },
     {
@@ -933,7 +933,7 @@
       "modelMargin": -5.497941434703424,
       "modelPick": "away",
       "neutral": false,
-      "start": "2026-11-15T00:30:00.000Z",
+      "start": "2026-11-15T03:30:00.000Z",
       "week": 11
     },
     {
@@ -1063,7 +1063,7 @@
       "modelMargin": 1.563566669563486,
       "modelPick": "home",
       "neutral": false,
-      "start": "2026-11-14T17:00:00.000Z",
+      "start": "2026-11-14T21:15:00.000Z",
       "week": 11
     },
     {
@@ -1539,16 +1539,16 @@
       "awayAbbr": "FSU",
       "awayAp": null,
       "awayConf": "ACC",
-      "awayPts": null,
+      "awayPts": 16,
       "awayRank": 53,
       "awayRecord": "4-5",
       "books": 4,
-      "completed": false,
+      "completed": true,
       "home": "Pittsburgh",
       "homeAbbr": "PITT",
       "homeAp": null,
       "homeConf": "ACC",
-      "homePts": null,
+      "homePts": 10,
       "homeRank": 37,
       "homeRecord": "6-3",
       "id": 401858293,
@@ -2311,7 +2311,7 @@
       "modelMargin": -1.7251886117100197,
       "modelPick": "home",
       "neutral": false,
-      "start": "2026-11-14T21:15:00.000Z",
+      "start": "2026-11-14T22:30:00.000Z",
       "week": 11
     },
     {
@@ -2423,16 +2423,16 @@
       "awayAbbr": "ILL",
       "awayAp": null,
       "awayConf": "Big Ten",
-      "awayPts": null,
+      "awayPts": 14,
       "awayRank": 43,
       "awayRecord": "6-3",
       "books": 4,
-      "completed": false,
+      "completed": true,
       "home": "UCLA",
       "homeAbbr": "UCLA",
       "homeAp": 4,
       "homeConf": "Big Ten",
-      "homePts": null,
+      "homePts": 22,
       "homeRank": 14,
       "homeRecord": "9-0",
       "id": 401858526,
@@ -3195,7 +3195,7 @@
       "modelMargin": 3.447877067644167,
       "modelPick": "away",
       "neutral": false,
-      "start": "2026-11-14T20:30:00.000Z",
+      "start": "2026-11-15T00:15:00.000Z",
       "week": 11
     },
     {
@@ -3247,7 +3247,7 @@
       "modelMargin": -1.1103628082176886,
       "modelPick": "away",
       "neutral": false,
-      "start": "2026-11-14T19:00:00.000Z",
+      "start": "2026-11-14T21:30:00.000Z",
       "week": 11
     },
     {
